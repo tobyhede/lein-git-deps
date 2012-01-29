@@ -1,0 +1,22 @@
+# lein-git-deps
+
+FIXME: write description
+
+Original code extracted from the excellent ClojureScript One Project:
+
+https://github.com/brentonashworth/one
+https://github.com/brentonashworth/one/blob/master/src/leiningen/git_deps.clj
+
+
+## Usage
+
+FIXME: write
+
+## License
+
+Copyright (C) 2012 Toby Hede
+
+Copyright (C) 2012 Brenton Ashworth and Relevance, Inc
+
+Distributed under the Eclipse Public License, the same as Clojure uses. See the file LICENSE.
+
