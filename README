@@ -1,16 +1,31 @@
 # lein-git-deps
 
-FIXME: write description
+A leiningen task that will pull dependencies in via git.
 
 Original code extracted from the excellent ClojureScript One Project:
 
 https://github.com/brentonashworth/one
 https://github.com/brentonashworth/one/blob/master/src/leiningen/git_deps.clj
 
-
 ## Usage
 
-FIXME: write
+Dependencies should be listed in project.clj under the ":git-dependencies" key
+
+Dependencies can be provided as:
+
+ * url
+ * url & any param applicable for 'git checkout', like a commit id or a branch name.
+ * url, commit, and a map of options
+
+
+To get the system to play nice with leiningen, you will need to add the code to to the classpath:
+
+    :git-dependencies [["https://github.com/tobyhede/monger.git"]]
+    :extra-classpath-dirs [".lein-git-deps/monger/src/"]
+
+You will also need to manually add the checked-out project's dependencies as your own (the plugin simply checks out the code, it doesn't recursively resolve dependencies).
+
+
 
 ## License
 
