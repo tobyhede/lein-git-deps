@@ -3,7 +3,9 @@
   If the directory already exists, it does a git pull and git checkout."
   (:require [clojure.java.shell :as sh]
             [clojure.java.io :as io]
-            [clojure.string :as string]))
+            [clojure.string :as string]
+            [robert.hooke :as hooke]
+            [leiningen.deps :as deps]))
 
 ;; Why, you might ask, are we using str here instead of simply def'ing
 ;; the var to a string directly? The answer is that we are working
@@ -109,3 +111,7 @@
         (git-pull clone-dir)
         (git-clone dep-url clone-dir-name git-deps-dir))
       (git-checkout commit clone-dir))))
+
+(hooke/add-hook #'deps/deps (fn [task & args]
+                              (apply task args)
+                              (git-deps (first args))))
