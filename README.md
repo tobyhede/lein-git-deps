@@ -62,9 +62,9 @@ suitable for development. The code you're pulling from GitHub can
 change at any time, without warning. If you're deploying code to
 production or releasing it publicly, it's better to base your code on
 a stable known-target release. Getting the upstream maintainer of the
-original library is best, but this is not always possible if the
-original author is not around or if the project has a slow release
-cycle.
+original library to release a new official version is best, but this
+is not always possible if the original author is not around or if the
+project has a slow release cycle.
 
 In the case where pushing an updated version of the mainline release
 is not possible, fork the project and package up your own
