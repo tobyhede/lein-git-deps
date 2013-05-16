@@ -57,6 +57,18 @@
   (println "Running git checkout " commit " in " (str dir))
   (exec "git" "checkout" commit :dir dir))
 
+(defn- git-submodule-init
+  "Initalize submodules in the given dir"
+  [dir]
+  (println "Running git submodule init in " (str dir))
+  (exec "git" "submodule" "init" :dir dir))
+
+(defn- git-submodule-update
+  "Update submodules in the given dir"
+  [dir]
+  (println "Running git submodule update in " (str dir))
+  (exec "git" "submodule" "update" :dir dir))
+
 (defn- detached-head?
   "Return true if the git repository in dir has HEAD detached."
   [dir]
@@ -110,7 +122,9 @@
       (if (directory-exists? clone-dir)
         (git-pull clone-dir)
         (git-clone dep-url clone-dir-name git-deps-dir))
-      (git-checkout commit clone-dir))))
+      (git-checkout commit clone-dir)
+      (git-submodule-init clone-dir)
+      (git-submodule-update))))
 
 (hooke/add-hook #'deps/deps (fn [task & args]
                               (apply task args)
