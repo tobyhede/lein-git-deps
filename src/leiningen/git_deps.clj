@@ -95,15 +95,17 @@
   "Return a map of the project's git dependencies."
   [project]
   (map (fn [dep]
-      (let [[dep-url commit {clone-dir-name :dir}] dep
+      (let [[dep-url commit {clone-dir-name :dir src :src}] dep
             commit (or commit "master")
             clone-dir-name (or clone-dir-name (default-clone-dir dep-url))
-            clone-dir (io/file git-deps-dir clone-dir-name)]
+            clone-dir (io/file git-deps-dir clone-dir-name)
+            src (or src "src")]
         {:dep dep
          :dep-url dep-url
          :commit commit
          :clone-dir-name clone-dir-name
-         :clone-dir clone-dir}))
+         :clone-dir clone-dir
+         :src src}))
     (:git-dependencies project)))
 
 (defn git-deps
@@ -122,9 +124,11 @@
                         \"329708b\"]
 
                        ;; Third form: A URL, a commit, and a map
+                       ;; all keys in the map are optional
                        [\"https://github.com/foo/quux.git\"
                         \"some-branch\"
-                        {:dir \"alternate-directory\"}]]
+                        {:dir \"alternate-directory-to-clone-to\"
+                         :src \"alternate-src-directory-within-repo\"}]]
 "
   [project]
   (when-not (directory-exists? git-deps-dir)
@@ -147,7 +151,7 @@
 
 (defn- add-source-paths
   [project dep]
-  (let [dep-src (-> dep :clone-dir .getAbsolutePath (str "/src"))]
+  (let [dep-src (-> dep :clone-dir .getAbsolutePath (str "/" (:src dep)))]
     (update-in project [:source-paths] conj dep-src)))
 
 (defn- add-dependencies
