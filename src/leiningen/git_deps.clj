@@ -78,7 +78,7 @@
         current-branch (first (filter #(.startsWith % "*") lines))]
     (when-not current-branch
       (throw (Exception. "Unable to determine current branch")))
-    (= current-branch "* (no branch)")))
+    (or (= current-branch "* (no branch)") (.startsWith current-branch "* (detached"))))
 
 (defn- git-pull
   "Run 'git-pull' in directory dir, but only if we're on a branch. If
