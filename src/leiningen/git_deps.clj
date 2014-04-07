@@ -156,10 +156,14 @@
 
 (defn- add-dependencies
   [project dep]
-  (let [dep-proj-path (-> dep :clone-dir .getAbsolutePath (str "/project.clj"))
-        dep-proj (lein-project/read dep-proj-path)
-        dep-deps (:dependencies dep-proj)]
-    (update-in project [:dependencies] #(apply conj % dep-deps))))
+  (let [dep-proj-path (-> dep :clone-dir .getAbsolutePath (str "/project.clj"))]
+    (try
+      (let [dep-proj (lein-project/read dep-proj-path)
+            dep-deps (:dependencies dep-proj)]
+        (update-in project [:dependencies] #(apply conj % dep-deps)))
+      (catch Exception ex
+        (println "Could not read git-dep's project:" dep-proj-path)
+        project))))
 
 (defn middleware
   [project]
