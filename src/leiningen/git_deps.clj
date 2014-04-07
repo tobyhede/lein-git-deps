@@ -126,6 +126,8 @@
       (git-submodule-init clone-dir)
       (git-submodule-update clone-dir))))
 
-(hooke/add-hook #'deps/deps (fn [task & args]
-                              (apply task args)
-                              (git-deps (first args))))
+(defn hooks
+  []
+  (hooke/add-hook #'deps/deps (fn [task & args]
+                                (apply task args)
+                                (git-deps (first args)))))
