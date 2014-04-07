@@ -91,6 +91,11 @@
       (exec "git" "fetch" :dir dir))
     (exec "git" "pull" :dir dir)))
 
+(defn- git-rev-parse
+  "Run 'git-rev-parse' and return it's output."
+  [rev dir]
+  (:out (exec "git" "rev-parse" "--revs-only" rev :dir dir)))
+
 (defn- git-dependencies
   "Return a map of the project's git dependencies."
   [project]
@@ -107,6 +112,43 @@
          :clone-dir clone-dir
          :src src}))
     (:git-dependencies project)))
+
+(defn- needs-update?
+  "Checks if the required rev (aka commit) from :git-dependencies
+  is the same as HEAD."
+  [clone-dir commit]
+  (let [head (git-rev-parse "HEAD" clone-dir)
+        need (git-rev-parse commit clone-dir)]
+    (or (empty? head) (empty? need) (not= head need))))
+
+(defn- checkout-repo
+  "Performs the actual checkout steps."
+  [clone-dir commit]
+  (git-checkout commit clone-dir)
+  (git-submodule-init clone-dir)
+  (git-submodule-update clone-dir))
+
+(defn- setup-git-repo
+  "Performs all the steps to set up a single git repo.
+  Besides the dependency map, this function also accepts
+  an optional `mode` argument.
+
+  When (= mode :force-update), the repo is updated via git-pull.
+  If mode is not given, the repo is only updated if
+  needs-update? returns true."
+  [dep & mode]
+  (when-not (directory-exists? git-deps-dir)
+    (.mkdir (io/file git-deps-dir)))
+  (let [mode (first mode)
+        {:keys [dep-url commit clone-dir-name clone-dir]} dep]
+    (if (directory-exists? clone-dir)
+      (if (or (= mode :force-update) (needs-update? clone-dir commit))
+        (do
+          (git-pull clone-dir)
+          (checkout-repo clone-dir commit)))
+      (do
+        (git-clone dep-url clone-dir-name git-deps-dir)
+        (checkout-repo clone-dir commit)))))
 
 (defn git-deps
   "A leiningen task that will pull dependencies in via git.
@@ -131,17 +173,10 @@
                          :src \"alternate-src-directory-within-repo\"}]]
 "
   [project]
-  (when-not (directory-exists? git-deps-dir)
-    (.mkdir (io/file git-deps-dir)))
   (doseq [dep (git-dependencies project)]
-    (let [{:keys [dep dep-url commit clone-dir-name clone-dir]} dep]
-      (println "Setting up dependency for " dep)
-      (if (directory-exists? clone-dir)
-        (git-pull clone-dir)
-        (git-clone dep-url clone-dir-name git-deps-dir))
-      (git-checkout commit clone-dir)
-      (git-submodule-init clone-dir)
-      (git-submodule-update clone-dir))))
+    (let [{dep-str :dep} dep]
+      (println "Setting up dependency for " dep-str)
+      (setup-git-repo dep :force-update))))
 
 (defn hooks
   "Called by leiningen via lein-git-deps.plugin/hooks."
@@ -174,4 +209,5 @@
   "Called by leiningen via lein-git-deps.plugin/middleware."
   [project]
   (let [deps (git-dependencies project)]
+    (doseq [dep deps] (setup-git-repo dep))
     (reduce add-source-paths (reduce add-dependencies project deps) deps)))
