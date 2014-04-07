@@ -5,7 +5,8 @@
             [clojure.java.io :as io]
             [clojure.string :as string]
             [robert.hooke :as hooke]
-            [leiningen.deps :as deps]))
+            [leiningen.deps :as deps]
+            [leiningen.core.project :as lein-project]))
 
 ;; Why, you might ask, are we using str here instead of simply def'ing
 ;; the var to a string directly? The answer is that we are working
@@ -90,6 +91,21 @@
       (exec "git" "fetch" :dir dir))
     (exec "git" "pull" :dir dir)))
 
+(defn- git-dependencies
+  "Return a map of the project's git dependencies."
+  [project]
+  (map (fn [dep]
+      (let [[dep-url commit {clone-dir-name :dir}] dep
+            commit (or commit "master")
+            clone-dir-name (or clone-dir-name (default-clone-dir dep-url))
+            clone-dir (io/file git-deps-dir clone-dir-name)]
+        {:dep dep
+         :dep-url dep-url
+         :commit commit
+         :clone-dir-name clone-dir-name
+         :clone-dir clone-dir}))
+    (:git-dependencies project)))
+
 (defn git-deps
   "A leiningen task that will pull dependencies in via git.
 
@@ -113,12 +129,9 @@
   [project]
   (when-not (directory-exists? git-deps-dir)
     (.mkdir (io/file git-deps-dir)))
-  (doseq [dep (:git-dependencies project)]
-    (println "Setting up dependency for " dep)
-    (let [[dep-url commit {clone-dir-name :dir}] dep
-          commit (or commit "master")
-          clone-dir-name (or clone-dir-name (default-clone-dir dep-url))
-          clone-dir (io/file git-deps-dir clone-dir-name)]
+  (doseq [dep (git-dependencies project)]
+    (let [{:keys [dep dep-url commit clone-dir-name clone-dir]} dep]
+      (println "Setting up dependency for " dep)
       (if (directory-exists? clone-dir)
         (git-pull clone-dir)
         (git-clone dep-url clone-dir-name git-deps-dir))
@@ -131,3 +144,20 @@
   (hooke/add-hook #'deps/deps (fn [task & args]
                                 (apply task args)
                                 (git-deps (first args)))))
+
+(defn- add-source-paths
+  [project dep]
+  (let [dep-src (-> dep :clone-dir .getAbsolutePath (str "/src"))]
+    (update-in project [:source-paths] conj dep-src)))
+
+(defn- add-dependencies
+  [project dep]
+  (let [dep-proj-path (-> dep :clone-dir .getAbsolutePath (str "/project.clj"))
+        dep-proj (lein-project/read dep-proj-path)
+        dep-deps (:dependencies dep-proj)]
+    (update-in project [:dependencies] #(apply conj % dep-deps))))
+
+(defn middleware
+  [project]
+  (let [deps (git-dependencies project)]
+    (reduce add-source-paths (reduce add-dependencies project deps) deps)))

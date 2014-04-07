@@ -2,3 +2,4 @@
   (:require [leiningen.git-deps :as git-deps]))
 
 (def hooks git-deps/hooks)
+(def middleware git-deps/middleware)
