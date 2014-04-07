@@ -124,7 +124,7 @@
         (git-clone dep-url clone-dir-name git-deps-dir))
       (git-checkout commit clone-dir)
       (git-submodule-init clone-dir)
-      (git-submodule-update))))
+      (git-submodule-update clone-dir))))
 
 (hooke/add-hook #'deps/deps (fn [task & args]
                               (apply task args)
