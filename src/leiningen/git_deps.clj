@@ -144,17 +144,22 @@
       (git-submodule-update clone-dir))))
 
 (defn hooks
+  "Called by leiningen via lein-git-deps.plugin/hooks."
   []
   (hooke/add-hook #'deps/deps (fn [task & args]
                                 (apply task args)
                                 (git-deps (first args)))))
 
 (defn- add-source-paths
+  "Given a project and a dependency map (dep), adds the dependency's
+  soure-path to the main project"
   [project dep]
   (let [dep-src (-> dep :clone-dir .getAbsolutePath (str "/" (:src dep)))]
     (update-in project [:source-paths] conj dep-src)))
 
 (defn- add-dependencies
+  "Given a project and a dependency map (dep), adds all of the dependency's
+  dependencies to the main project."
   [project dep]
   (let [dep-proj-path (-> dep :clone-dir .getAbsolutePath (str "/project.clj"))]
     (try
@@ -166,6 +171,7 @@
         project))))
 
 (defn middleware
+  "Called by leiningen via lein-git-deps.plugin/middleware."
   [project]
   (let [deps (git-dependencies project)]
     (reduce add-source-paths (reduce add-dependencies project deps) deps)))
