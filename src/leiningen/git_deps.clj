@@ -5,7 +5,8 @@
             [clojure.java.io :as io]
             [clojure.string :as string]
             [robert.hooke :as hooke]
-            [leiningen.deps :as deps]))
+            [leiningen.deps :as deps]
+            [leiningen.core.project :as lein-project]))
 
 ;; Why, you might ask, are we using str here instead of simply def'ing
 ;; the var to a string directly? The answer is that we are working
@@ -77,7 +78,7 @@
         current-branch (first (filter #(.startsWith % "*") lines))]
     (when-not current-branch
       (throw (Exception. "Unable to determine current branch")))
-    (= current-branch "* (no branch)")))
+    (or (= current-branch "* (no branch)") (.startsWith current-branch "* (detached"))))
 
 (defn- git-pull
   "Run 'git-pull' in directory dir, but only if we're on a branch. If
@@ -89,6 +90,65 @@
       (println "Not on a branch, so fetching instead of pulling.")
       (exec "git" "fetch" :dir dir))
     (exec "git" "pull" :dir dir)))
+
+(defn- git-rev-parse
+  "Run 'git-rev-parse' and return it's output."
+  [rev dir]
+  (:out (exec "git" "rev-parse" "--revs-only" rev :dir dir)))
+
+(defn- git-dependencies
+  "Return a map of the project's git dependencies."
+  [project]
+  (map (fn [dep]
+      (let [[dep-url commit {clone-dir-name :dir src :src}] dep
+            commit (or commit "master")
+            clone-dir-name (or clone-dir-name (default-clone-dir dep-url))
+            clone-dir (io/file git-deps-dir clone-dir-name)
+            src (or src "src")]
+        {:dep dep
+         :dep-url dep-url
+         :commit commit
+         :clone-dir-name clone-dir-name
+         :clone-dir clone-dir
+         :src src}))
+    (:git-dependencies project)))
+
+(defn- needs-update?
+  "Checks if the required rev (aka commit) from :git-dependencies
+  is the same as HEAD."
+  [clone-dir commit]
+  (let [head (git-rev-parse "HEAD" clone-dir)
+        need (git-rev-parse commit clone-dir)]
+    (or (empty? head) (empty? need) (not= head need))))
+
+(defn- checkout-repo
+  "Performs the actual checkout steps."
+  [clone-dir commit]
+  (git-checkout commit clone-dir)
+  (git-submodule-init clone-dir)
+  (git-submodule-update clone-dir))
+
+(defn- setup-git-repo
+  "Performs all the steps to set up a single git repo.
+  Besides the dependency map, this function also accepts
+  an optional `mode` argument.
+
+  When (= mode :force-update), the repo is updated via git-pull.
+  If mode is not given, the repo is only updated if
+  needs-update? returns true."
+  [dep & mode]
+  (when-not (directory-exists? git-deps-dir)
+    (.mkdir (io/file git-deps-dir)))
+  (let [mode (first mode)
+        {:keys [dep-url commit clone-dir-name clone-dir]} dep]
+    (if (directory-exists? clone-dir)
+      (if (or (= mode :force-update) (needs-update? clone-dir commit))
+        (do
+          (git-pull clone-dir)
+          (checkout-repo clone-dir commit)))
+      (do
+        (git-clone dep-url clone-dir-name git-deps-dir)
+        (checkout-repo clone-dir commit)))))
 
 (defn git-deps
   "A leiningen task that will pull dependencies in via git.
@@ -106,26 +166,48 @@
                         \"329708b\"]
 
                        ;; Third form: A URL, a commit, and a map
+                       ;; all keys in the map are optional
                        [\"https://github.com/foo/quux.git\"
                         \"some-branch\"
-                        {:dir \"alternate-directory\"}]]
+                        {:dir \"alternate-directory-to-clone-to\"
+                         :src \"alternate-src-directory-within-repo\"}]]
 "
   [project]
-  (when-not (directory-exists? git-deps-dir)
-    (.mkdir (io/file git-deps-dir)))
-  (doseq [dep (:git-dependencies project)]
-    (println "Setting up dependency for " dep)
-    (let [[dep-url commit {clone-dir-name :dir}] dep
-          commit (or commit "master")
-          clone-dir-name (or clone-dir-name (default-clone-dir dep-url))
-          clone-dir (io/file git-deps-dir clone-dir-name)]
-      (if (directory-exists? clone-dir)
-        (git-pull clone-dir)
-        (git-clone dep-url clone-dir-name git-deps-dir))
-      (git-checkout commit clone-dir)
-      (git-submodule-init clone-dir)
-      (git-submodule-update))))
+  (doseq [dep (git-dependencies project)]
+    (let [{dep-str :dep} dep]
+      (println "Setting up dependency for " dep-str)
+      (setup-git-repo dep :force-update))))
 
-(hooke/add-hook #'deps/deps (fn [task & args]
-                              (apply task args)
-                              (git-deps (first args))))
+(defn hooks
+  "Called by leiningen via lein-git-deps.plugin/hooks."
+  []
+  (hooke/add-hook #'deps/deps (fn [task & args]
+                                (apply task args)
+                                (git-deps (first args)))))
+
+(defn- add-source-paths
+  "Given a project and a dependency map (dep), adds the dependency's
+  soure-path to the main project"
+  [project dep]
+  (let [dep-src (-> dep :clone-dir .getAbsolutePath (str "/" (:src dep)))]
+    (update-in project [:source-paths] conj dep-src)))
+
+(defn- add-dependencies
+  "Given a project and a dependency map (dep), adds all of the dependency's
+  dependencies to the main project."
+  [project dep]
+  (let [dep-proj-path (-> dep :clone-dir .getAbsolutePath (str "/project.clj"))]
+    (try
+      (let [dep-proj (lein-project/read dep-proj-path)
+            dep-deps (:dependencies dep-proj)]
+        (update-in project [:dependencies] #(apply conj % dep-deps)))
+      (catch Exception ex
+        (println "Could not read git-dep's project:" dep-proj-path)
+        project))))
+
+(defn middleware
+  "Called by leiningen via lein-git-deps.plugin/middleware."
+  [project]
+  (let [deps (git-dependencies project)]
+    (doseq [dep deps] (setup-git-repo dep))
+    (reduce add-source-paths (reduce add-dependencies project deps) deps)))
