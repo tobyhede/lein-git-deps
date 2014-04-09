@@ -25,7 +25,7 @@ lein-git-deps as a dev-dependency, specify your git-dependencies, and
 then add the Git-sourced code to to the classpath:
 
 ```clojure
-:dev-dependencies [[lein-git-deps "0.0.1-SNAPSHOT"]]
+:dev-dependencies [[lein-git-deps "0.0.2"]]
 :git-dependencies [["https://github.com/tobyhede/monger.git"]]
 :extra-classpath-dirs [".lein-git-deps/monger/src/"]
 ```
@@ -44,7 +44,7 @@ workaround, you can add your library's source directory with
 `:source-paths`:
 
 ```clojure
-:plugins [[lein-git-deps "0.0.1-SNAPSHOT"]]
+:plugins [[lein-git-deps "0.0.2"]]
 :git-dependencies [["https://github.com/tobyhede/monger.git"]]
 ```
 
