@@ -44,7 +44,7 @@ workaround, you can add your library's source directory with
 `:source-paths`:
 
 ```clojure
-:plugins [[lein-git-deps "0.0.1-SNAPSHOT"]]
+:plugins [[lein-git-deps "0.0.2-SNAPSHOT"]]
 :git-dependencies [["https://github.com/tobyhede/monger.git"]]
 ```
 
