@@ -6,6 +6,7 @@ A Leiningen task that will pull dependencies in via git.
 Original code extracted from the excellent ClojureScript One Project:
 
 https://github.com/brentonashworth/one
+
 https://github.com/brentonashworth/one/blob/master/src/leiningen/git_deps.clj
 
 Usage
@@ -25,7 +26,7 @@ lein-git-deps as a dev-dependency, specify your git-dependencies, and
 then add the Git-sourced code to to the classpath:
 
 ```clojure
-:dev-dependencies [[lein-git-deps "0.0.1-SNAPSHOT"]]
+:dev-dependencies [[lein-git-deps "0.0.3-SNAPSHOT"]]
 :git-dependencies [["https://github.com/tobyhede/monger.git"]]
 :extra-classpath-dirs [".lein-git-deps/monger/src/"]
 ```
@@ -41,11 +42,14 @@ If you're using Leiningen 2, the setup is slightly different. You must
 use the `:plugins` key rather than `:dev-dependencies`, and the
 `:extra-classpath-dirs` setting is no longer supported. As a
 workaround, you can add your library's source directory with
-`:source-paths`:
+`:source-paths` or specify it in the third parameter:
 
 ```clojure
-:plugins [[lein-git-deps "0.0.1-SNAPSHOT"]]
-:git-dependencies [["https://github.com/tobyhede/monger.git"]]
+:plugins [[lein-git-deps "0.0.3-SNAPSHOT"]]
+:git-dependencies [["https://github.com/tobyhede/monger.git"
+                    "some-branch or tag"
+                    {:dir "alternate-directory-to-clone-to"
+                     :src "alternate-src-directory-within-repo"}]]
 ```
 
 Emacs / clojure-jack-in
@@ -75,7 +79,7 @@ release. Then, you can either deploy it on your local system with
 there, or publish it to Clojars with a different group-id.
 
 Detailed instructions on how to do these things can be found at
-[https://github.com/technomancy/leiningen/blob/stable/doc/DEPLOY.md](https://github.com/technomancy/leiningen/blob/stable/doc/DEPLOY.md).
+[here](https://github.com/technomancy/leiningen/blob/stable/doc/DEPLOY.md).
 
 ## License
 
