@@ -8,14 +8,9 @@
             [leiningen.deps :as deps]
             [leiningen.core.project :as lein-project]))
 
-;; Why, you might ask, are we using str here instead of simply def'ing
-;; the var to a string directly? The answer is that we are working
-;; around a bug in marginalia where it can't tell the difference
-;; between the string that's the value for a def and a docstring. It
-;; will hopefully be fixed RSN, because this makes us feel dirty.
 (def ^{:private true
-       :doc "The directory into which dependencies will be cloned."}
-  git-deps-dir (str ".lein-git-deps"))
+       :doc "The default directory into which dependencies will be cloned."}
+  git-deps-dir ".lein-git-deps")
 
 (defn- directory-exists?
   "Return true if the specified directory exists."
@@ -25,11 +20,14 @@
 (defn- default-clone-dir
   "Given a git URL, return the directory it would clone into by default."
   [uri]
-  (string/join "." (-> uri
-                       (string/split #"/")
-                       (last)
-                       (string/split #"\.")
-                       butlast)))
+  (str git-deps-dir
+       "/"
+       (string/join "."
+                    (-> uri
+                        (string/split #"/")
+                        (last)
+                        (string/split #"\.")
+                        butlast))))
 
 (defn- exec
   "Run a command, throwing an exception if it fails, returning the
@@ -47,10 +45,9 @@
                 err))))))
 
 (defn- git-clone
-  "Clone the git repository at url into dir-name while working in
-  directory working-dir."
-  [url dir-name working-dir]
-  (apply exec (remove nil? ["git" "clone" url (str dir-name) :dir working-dir])))
+  "Clone the git repository at url into dir-name."
+  [url dir-name]
+  (apply exec (remove nil? ["git" "clone" url (str dir-name)])))
 
 (defn- git-checkout
   "Check out the specified commit in dir."
@@ -86,9 +83,8 @@
   [dir]
   (println "Running git pull on " (str dir))
   (if (detached-head? dir)
-    (do
-      (println "Not on a branch, so fetching instead of pulling.")
-      (exec "git" "fetch" :dir dir))
+    (do (println "Not on a branch, so fetching instead of pulling.")
+        (exec "git" "fetch" :dir dir))
     (exec "git" "pull" :dir dir)))
 
 (defn- git-rev-parse
@@ -100,17 +96,15 @@
   "Return a map of the project's git dependencies."
   [project]
   (map (fn [dep]
-      (let [[dep-url commit {clone-dir-name :dir src :src}] dep
-            commit (or commit "master")
-            clone-dir-name (or clone-dir-name (default-clone-dir dep-url))
-            clone-dir (io/file git-deps-dir clone-dir-name)
-            src (or src "src")]
-        {:dep dep
-         :dep-url dep-url
-         :commit commit
-         :clone-dir-name clone-dir-name
-         :clone-dir clone-dir
-         :src src}))
+         (let [[dep-url commit {dir :dir src :src}] dep
+               commit (or commit "master")
+               clone-dir (or dir (default-clone-dir dep-url))
+               src (or src "src")]
+           {:dep dep
+            :dep-url dep-url
+            :commit commit
+            :clone-dir clone-dir
+            :src src}))
     (:git-dependencies project)))
 
 (defn- needs-update?
@@ -137,18 +131,16 @@
   If mode is not given, the repo is only updated if
   needs-update? returns true."
   [dep & mode]
-  (when-not (directory-exists? git-deps-dir)
-    (.mkdir (io/file git-deps-dir)))
   (let [mode (first mode)
-        {:keys [dep-url commit clone-dir-name clone-dir]} dep]
+        {:keys [dep-url commit clone-dir]} dep]
     (if (directory-exists? clone-dir)
-      (if (or (= mode :force-update) (needs-update? clone-dir commit))
-        (do
-          (git-pull clone-dir)
-          (checkout-repo clone-dir commit)))
-      (do
-        (git-clone dep-url clone-dir-name git-deps-dir)
-        (checkout-repo clone-dir commit)))))
+      (when (or (= mode :force-update)
+                (needs-update? clone-dir commit))
+        (do (git-pull clone-dir)
+            (checkout-repo clone-dir commit)))
+      (do (.mkdir (io/file clone-dir))
+          (git-clone dep-url clone-dir)
+          (checkout-repo clone-dir commit)))))
 
 (defn git-deps
   "A leiningen task that will pull dependencies in via git.
@@ -168,7 +160,7 @@
                        ;; Third form: A URL, a commit, and a map
                        ;; all keys in the map are optional
                        [\"https://github.com/foo/quux.git\"
-                        \"some-branch\"
+                        \"some-branch or tag\"
                         {:dir \"alternate-directory-to-clone-to\"
                          :src \"alternate-src-directory-within-repo\"}]]
 "
@@ -189,14 +181,22 @@
   "Given a project and a dependency map (dep), adds the dependency's
   soure-path to the main project"
   [project dep]
-  (let [dep-src (-> dep :clone-dir .getAbsolutePath (str "/" (:src dep)))]
+  (let [dep-src (-> dep
+                    :clone-dir
+                    io/file
+                    .getAbsolutePath
+                    (str "/" (:src dep)))]
     (update-in project [:source-paths] conj dep-src)))
 
 (defn- add-dependencies
   "Given a project and a dependency map (dep), adds all of the dependency's
   dependencies to the main project."
   [project dep]
-  (let [dep-proj-path (-> dep :clone-dir .getAbsolutePath (str "/project.clj"))]
+  (let [dep-proj-path (-> dep
+                          :clone-dir
+                          io/file
+                          .getAbsolutePath
+                          (str "/project.clj"))]
     (try
       (let [dep-proj (lein-project/read dep-proj-path)
             dep-deps (:dependencies dep-proj)]
@@ -210,4 +210,6 @@
   [project]
   (let [deps (git-dependencies project)]
     (doseq [dep deps] (setup-git-repo dep))
-    (reduce add-source-paths (reduce add-dependencies project deps) deps)))
+    (reduce add-source-paths
+            (reduce add-dependencies project deps)
+            deps)))
